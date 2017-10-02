@@ -1,0 +1,90 @@
+---
+title: "Practical_Machine_Learning_Project"
+author: "HSteude"
+date: "1 Oktober 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Background and introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+In this project, we will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participant They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The five ways are exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). Only Class A corresponds to correct performance. The goal of this project is to predict the manner in which they did the exercise, i.e., Class A to E. 
+
+##Load packages
+```{r}
+library(caret)
+library(dplyr)
+```
+##Load data
+```{r}
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv","pml-training.csv")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv","pml-testing.csv")
+pml.training <- tbl_df(read.csv("pml-training.csv", na.strings=c("","NA")))
+pml.testing <- tbl_df(read.csv("pml-testing.csv",na.strings=c("","NA")))
+```
+
+##Cleaning and splitting data
+In order to get a clean Analytical Base Table (ABT) I first remove all the columns that are not related to the acceleration of the arm, belt, dumbbell or forearm as well as colums that contain missing values. Afterwards I split it into a training and testing set.
+
+```{r}
+#Select all the colums related to accellaration
+ABT <- pml.training[,colSums(is.na(pml.training)) == 0]
+ABT <- select(ABT, classe, matches("belt|arm|dumbbell|forearm"))
+#Split in train and test set
+set.seed(1)
+inTrain = createDataPartition(ABT$classe, p = 3/4, list=FALSE)
+training = ABT[inTrain,]
+testing = ABT[-inTrain,]
+```
+
+## Model Building and Selection
+I build three classification models (CART, linear descriminant analysis and random forest) to check their accuracy and select the best one afterwards. I use k-fold cross validation with k = 5.
+```{r}
+#training models
+mod.CART <- train(classe ~ ., 
+                  data = training, 
+                  method = "rpart",
+                  trControl = trainControl(method="cv", number= 5)
+                  )
+mod.lda <- train(classe~ ., 
+                  data = training, 
+                  method = "lda", 
+                  trControl = trainControl(method="cv", number= 5))
+mod.rf <- train(classe~ ., 
+                  data = training, 
+                  method = "rf", 
+                  trControl = trainControl(method="cv", number= 5))
+```
+In the following I check the accuracy of each model.
+```{r}
+#predict on the testing set
+pred.CART <- predict(mod.CART, testing)
+pred.lda <- predict(mod.lda, testing)
+pred.rf <- predict(mod.rf, testing)
+
+#Compute confusionmatrixes
+r.CART <- confusionMatrix(pred.CART, testing$classe)
+r.lda <- confusionMatrix(pred.lda, testing$classe)
+r.rf <- confusionMatrix(pred.rf, testing$classe)
+
+#Print accuracies
+print(c(CART = r.CART$overall[1], LDA = r.lda$overall[1],RF = r.rf$overall[1]))
+```
+AS illustrated, the random forrest algorithm provides by far the best results based on the model accuary, which is why I stick to this model for further analysis. Below I plot the confusion matrix of the random forrest model.
+```{r}
+print(r.rf$table)
+```
+##Validation/ Test
+Finally I will validate the model by using the 20 observation from the validation data set.
+```{r}
+#Compute predictions for 20 cases
+valid.rf <- predict(mod.rf, pml.testing)
+#Print predictions
+print(valid.rf)
+```
+#Conclusion
+According to the quiz provided in the coursera course this prediction perfectly matches the classes in the validation data set. This shows again, that my model is highly accurate. This completes the course project.
